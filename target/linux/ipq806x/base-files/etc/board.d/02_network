@@ -78,6 +78,7 @@ tplink,ad7200)
 ubnt,unifi-ac-hd)
 	ucidef_set_interface_lan "eth0 eth1"
 	;;
+linksys,e8350-v1 |\
 zyxel,nbg6817)
 	hw_mac_addr=$(mtd_get_mac_ascii 0:appsblenv ethaddr)
 	# XXX: drop upper case after kernel v5.4 is gone (qcom-smem)
