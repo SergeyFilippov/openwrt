@@ -264,6 +264,7 @@ nand_upgrade_ubinized() {
 	local ubi_length=$( (${gz}cat "$ubi_file" | wc -c) 2> /dev/null)
 
 	nand_detach_ubi "$CI_UBIPART" || return 1
+	fwtool -q -t -i /dev/null "$1"
 
 	local mtdnum="$( find_mtd_index "$CI_UBIPART" )"
 	${gz}cat "$ubi_file" | ubiformat "/dev/mtd$mtdnum" -S "$ubi_length" -y -f - && ubiattach -m "$mtdnum"
