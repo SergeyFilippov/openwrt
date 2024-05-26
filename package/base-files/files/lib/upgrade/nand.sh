@@ -223,6 +223,7 @@ nand_upgrade_ubinized() {
 	local mtddev="/dev/mtd${mtdnum}"
 	ubidetach -p "${mtddev}" || true
 	sync
+	fwtool -q -t -i /dev/null "$1"
 	ubiformat "${mtddev}" -y -f "${ubi_file}"
 	ubiattach -p "${mtddev}"
 	nand_do_upgrade_success
