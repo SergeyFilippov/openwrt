@@ -209,6 +209,10 @@
 			0x00094 0x4e        /* PORT6_STATUS */
 			>;
 	};
+
+	phy4: ethernet-phy@4 {
+		reg = <4>;
+	};
 };
 
 &gmac1 {
