@@ -157,7 +157,6 @@ TARGET_DEVICES += edgecore_ecw5410
 
 define Device/linksys_e8350-v1
 	$(call Device/LegacyImage)
-	$(Device/kernel-size-migration)
 	DEVICE_VENDOR := Linksys
 	DEVICE_MODEL := E8350
 	DEVICE_VARIANT := v1
@@ -167,8 +166,9 @@ define Device/linksys_e8350-v1
 	PAGESIZE := 2048
 	BLOCKSIZE := 128k
 	KERNEL_IN_UBI := 1
-	IMAGES = factory.bin sysupgrade.ubi
+	IMAGES = factory.bin sysupgrade.ubi sysupgrade.bin
 	IMAGE/sysupgrade.ubi := append-ubi | check-size 0x04000000 | append-metadata
+	IMAGE/sysupgrade.bin = sysupgrade-tar | append-metadata
 	IMAGE/factory.bin := append-ubi | check-size 0x04000000 | linksys-addfwhdr | linksys-bin
 	DEVICE_PACKAGES := ath10k-firmware-qca988x-ct
 endef
