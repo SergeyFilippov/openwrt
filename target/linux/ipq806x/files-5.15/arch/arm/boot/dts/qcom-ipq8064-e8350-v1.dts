@@ -52,40 +52,6 @@
 		};
 	};
 
-	nand-controller@1ac00000 {
-		compatible = "qcom,ipq806x-nand";
-		reg = <0x1ac00000 0x800>;
-		clocks = <&gcc EBI2_CLK>,
-			<&gcc EBI2_AON_CLK>;
-		clock-names = "core", "aon";
-		dmas = <&adm_dma 3>;
-		dma-names = "rxtx";
-		qcom,cmd-crci = <15>;
-		qcom,data-crci = <3>;
-
-		nand@0 {
-			reg = <0>;
-
-			nand-ecc-strength = <4>;
-			nand-bus-width = <8>;
-
-			partitions {
-				compatible = "fixed-partitions";
-
-				partition@0 {
-					label = "ubi";
-					reg = <0 0x4000000>;
-				};
-	
-				partition@4000000 {
-					label = "extra";
-					reg = <0x4000000 0x4000000>;
-				};
-			};
-		};
-	};
-
-
 	leds {
 		compatible = "gpio-leds";
 		pinctrl-0 = <&led_pins>;
@@ -105,6 +71,33 @@
 		wifi {
 			label = "green:wifi";
 			gpios = <&qcom_pinmux 54 GPIO_ACTIVE_HIGH>;
+		};
+	};
+};
+
+&nand {
+	status = "okay";
+	nand@0 {
+		reg = <0>;
+
+		nand-ecc-strength = <4>;
+		nand-bus-width = <8>;
+
+		nand-is-boot-medium;
+		qcom,boot-partitions = <0x0 0x4000000>;
+
+		partitions {
+			compatible = "fixed-partitions";
+
+			partition@0 {
+				label = "ubi";
+				reg = <0 0x4000000>;
+			};
+
+			partition@4000000 {
+				label = "extra";
+				reg = <0x4000000 0x4000000>;
+			};
 		};
 	};
 };
@@ -129,19 +122,6 @@
 	};
 };
 
-&gsbi4 {
-	qcom,mode = <GSBI_PROT_I2C_UART>;
-	status = "okay";
-	serial@16340000 {
-		status = "okay";
-	};
-	/*
-	* The i2c device on gsbi4 should not be enabled.
-	* On ipq806x designs gsbi4 i2c is meant for exclusive
-	* RPM usage. Turning this on in kernel manifests as
-	* i2c failure for the RPM.
-	*/
-};
 &gsbi5 {
 	qcom,mode = <GSBI_PROT_SPI>;
 	status = "okay";
@@ -174,13 +154,27 @@
 	status = "okay";
 };
 
+&hs_phy_0 {
+	status = "okay";
+};
+
+&ss_phy_0 {
+	status = "okay";
+};
+
 &usb3_0 {
-	clocks = <&gcc USB30_1_MASTER_CLK>;
+	status = "okay";
+};
+
+&hs_phy_1 {
+	status = "okay";
+};
+
+&ss_phy_1 {
 	status = "okay";
 };
 
 &usb3_1 {
-	clocks = <&gcc USB30_0_MASTER_CLK>;
 	status = "okay";
 };
 
