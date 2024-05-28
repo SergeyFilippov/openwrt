@@ -31,26 +31,54 @@
 			label = "reset";
 			gpios = <&qcom_pinmux 68 GPIO_ACTIVE_LOW>;
 			linux,code = <KEY_RESTART>;
-			debounce-interval = <60>;
-			wakeup-source;
 		};
 
 		wps {
 			label = "wps";
 			gpios = <&qcom_pinmux 65 GPIO_ACTIVE_LOW>;
 			linux,code = <KEY_WPS_BUTTON>;
-			debounce-interval = <60>;
-			wakeup-source;
 		};
 
 		wifi {
 			label = "wifi";
 			gpios = <&qcom_pinmux 67 GPIO_ACTIVE_LOW>;
 			linux,code = <KEY_RFKILL>;
-			debounce-interval = <60>;
-			wakeup-source;
 		};
 	};
+
+	nand-controller@1ac00000 {
+		compatible = "qcom,ipq806x-nand";
+		reg = <0x1ac00000 0x800>;
+		clocks = <&gcc EBI2_CLK>,
+			<&gcc EBI2_AON_CLK>;
+		clock-names = "core", "aon";
+		dmas = <&adm_dma 3>;
+		dma-names = "rxtx";
+		qcom,cmd-crci = <15>;
+		qcom,data-crci = <3>;
+
+		nand@0 {
+			reg = <0>;
+
+			nand-ecc-strength = <4>;
+			nand-bus-width = <8>;
+
+			partitions {
+				compatible = "fixed-partitions";
+
+				partition@0 {
+					label = "ubi";
+					reg = <0 0x4000000>;
+				};
+	
+				partition@4000000 {
+					label = "extra";
+					reg = <0x4000000 0x4000000>;
+				};
+			};
+		};
+	};
+
 
 	leds {
 		compatible = "gpio-leds";
@@ -58,43 +86,19 @@
 		pinctrl-names = "default";
 
 		led_power: power {
-			label = "green:power";
+			label = "e8350-v1:green:power";
 			gpios = <&qcom_pinmux 26 GPIO_ACTIVE_HIGH>;
 			default-state = "keep";
 		};
 
 		wps {
-			label = "green:wps";
+			label = "e8350-v1:green:wps";
 			gpios = <&qcom_pinmux 53 GPIO_ACTIVE_HIGH>;
                 };
 
 		wifi {
-			label = "green:wifi";
+			label = "e8350-v1:green:wifi";
 			gpios = <&qcom_pinmux 54 GPIO_ACTIVE_HIGH>;
-		};
-	};
-};
-
-&nand {
-	status = "okay";
-	nand@0 {
-		reg = <0>;
-
-		nand-ecc-strength = <4>;
-		nand-bus-width = <8>;
-
-		partitions {
-			compatible = "fixed-partitions";
-
-			partition@0 {
-				label = "ubi";
-				reg = <0 0x4000000>;
-			};
-
-			partition@4000000 {
-				label = "extra";
-				reg = <0x4000000 0x4000000>;
-			};
 		};
 	};
 };
@@ -119,6 +123,19 @@
 	};
 };
 
+&gsbi4 {
+	qcom,mode = <GSBI_PROT_I2C_UART>;
+	status = "okay";
+	serial@16340000 {
+		status = "okay";
+	};
+	/*
+	* The i2c device on gsbi4 should not be enabled.
+	* On ipq806x designs gsbi4 i2c is meant for exclusive
+	* RPM usage. Turning this on in kernel manifests as
+	* i2c failure for the RPM.
+	*/
+};
 &gsbi5 {
 	qcom,mode = <GSBI_PROT_SPI>;
 	status = "okay";
@@ -205,6 +222,10 @@
 			0x0007c 0x4e        /* PORT0_STATUS */
 			0x00094 0x4e        /* PORT6_STATUS */
 			>;
+	};
+
+	phy4: ethernet-phy@4 {
+		reg = <4>;
 	};
 };
 
