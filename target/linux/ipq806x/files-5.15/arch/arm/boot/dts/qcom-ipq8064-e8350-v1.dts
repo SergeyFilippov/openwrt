@@ -15,6 +15,7 @@
 
 	aliases {
 		serial0 = &gsbi4_serial;
+		mdio-gpio0 = &mdio0;
 
 		led-boot = &led_power;
 		led-failsafe = &led_power;
@@ -86,21 +87,25 @@
 		pinctrl-names = "default";
 
 		led_power: power {
-			label = "e8350-v1:green:power";
+			label = "green:power";
 			gpios = <&qcom_pinmux 26 GPIO_ACTIVE_HIGH>;
 			default-state = "keep";
 		};
 
 		wps {
-			label = "e8350-v1:green:wps";
+			label = "green:wps";
 			gpios = <&qcom_pinmux 53 GPIO_ACTIVE_HIGH>;
                 };
 
 		wifi {
-			label = "e8350-v1:green:wifi";
+			label = "green:wifi";
 			gpios = <&qcom_pinmux 54 GPIO_ACTIVE_HIGH>;
 		};
 	};
+};
+
+&adm_dma {
+	status = "okay";
 };
 
 &qcom_pinmux {
@@ -123,19 +128,6 @@
 	};
 };
 
-&gsbi4 {
-	qcom,mode = <GSBI_PROT_I2C_UART>;
-	status = "okay";
-	serial@16340000 {
-		status = "okay";
-	};
-	/*
-	* The i2c device on gsbi4 should not be enabled.
-	* On ipq806x designs gsbi4 i2c is meant for exclusive
-	* RPM usage. Turning this on in kernel manifests as
-	* i2c failure for the RPM.
-	*/
-};
 &gsbi5 {
 	qcom,mode = <GSBI_PROT_SPI>;
 	status = "okay";
@@ -223,10 +215,6 @@
 			0x00094 0x4e        /* PORT6_STATUS */
 			>;
 	};
-
-	phy4: ethernet-phy@4 {
-		reg = <4>;
-	};
 };
 
 &gmac1 {
@@ -259,6 +247,3 @@
 	compatible = "qcom,tcsr";
 };
 
-&adm_dma {
-	status = "okay";
-};
