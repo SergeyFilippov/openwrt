@@ -413,9 +413,9 @@ mac80211_hostapd_setup_base() {
 			he_spr_non_srg_obss_pd_max_offset:1 \
 			he_bss_color
 
-		he_phy_cap=$(iw phy "$phy" info | sed -n '/HE Iftypes: AP/,$p' | awk -F "[()]" '/HE PHY Capabilities/ { print $2 }' | head -1)
+		he_phy_cap=$(iw phy "$phy" info | sed -n '/HE Iftypes: .*AP/,$p' | awk -F "[()]" '/HE PHY Capabilities/ { print $2 }' | head -1)
 		he_phy_cap=${he_phy_cap:2}
-		he_mac_cap=$(iw phy "$phy" info | sed -n '/HE Iftypes: AP/,$p' | awk -F "[()]" '/HE MAC Capabilities/ { print $2 }' | head -1)
+		he_mac_cap=$(iw phy "$phy" info | sed -n '/HE Iftypes: .*AP/,$p' | awk -F "[()]" '/HE MAC Capabilities/ { print $2 }' | head -1)
 		he_mac_cap=${he_mac_cap:2}
 
 		append base_cfg "ieee80211ax=1" "$N"
@@ -753,7 +753,7 @@ mac80211_setup_supplicant() {
 	if [ "$mode" = "sta" ]; then
 		wpa_supplicant_add_network "$ifname"
 	else
-		wpa_supplicant_add_network "$ifname" "$freq" "$htmode" "$noscan"
+		wpa_supplicant_add_network "$ifname" "$freq" "$htmode" "$hostapd_noscan"
 	fi
 
 	NEWSPLIST="${NEWSPLIST}$ifname "
@@ -783,7 +783,7 @@ mac80211_setup_supplicant_noctl() {
 		return 1
 	}
 
-	wpa_supplicant_add_network "$ifname" "$freq" "$htmode" "$noscan"
+	wpa_supplicant_add_network "$ifname" "$freq" "$htmode" "$hostapd_noscan"
 
 	NEWSPLIST="${NEWSPLIST}$ifname "
 	[ "$enable" = 0 ] && {
