@@ -12,10 +12,10 @@ index f0f608a..24fc07b 100644
  FW_UTIL(avm-wasp-checksum "" --std=gnu99 "")
 diff --git a/src/addfwhdr.c b/src/addfwhdr.c
 new file mode 100644
-index 0000000..14c7488
+index 0000000..1b699c2
 --- /dev/null
 +++ b/src/addfwhdr.c
-@@ -0,0 +1,233 @@
+@@ -0,0 +1,176 @@
 +/*
 +	Linksys e8350 v1 firmware header generator
 +*/
@@ -31,26 +31,6 @@ index 0000000..14c7488
 +#include <sys/time.h>
 +
 +#include "cyg_crc.h"
-+#define AC2350          20
-+#define USA             1
-+
-+#if LOCALE == USA
-+	#define CYBERTAN_VERSION        "v1.0.03"
-+	#define SERIAL_NUMBER   "003"
-+	#define MINOR_VERSION   ""
-+	#define BUILD_KEYWORD   " B"
-+	#define BUILD_NUMBER    SERIAL_NUMBER
-+	#define BETA_VERSION    " "
-+	#define CYBERTAN_UBOOT_VERSION      "v1.0"
-+#else   // ETSI
-+	#define CYBERTAN_VERSION    "v1.0.00"
-+	#define SERIAL_NUMBER       "01"
-+	#define MINOR_VERSION       ""
-+	#define BUILD_KEYWORD   " B"
-+	#define BUILD_NUMBER    SERIAL_NUMBER
-+	#define BETA_VERSION    " "
-+	#define CYBERTAN_UBOOT_VERSION      "v1.0"
-+#endif
 +
 +//add for AC2350 F/W header
 +#define FWHDR_MAGIC_STR "CHDR"
@@ -77,12 +57,6 @@ index 0000000..14c7488
 +#ifndef TYPEDEF_UINT32
 +typedef unsigned int    uint32;
 +#endif
-+
-+typedef uint32_t cyg_uint32;
-+typedef uint16_t cyg_uint16;
-+
-+// extern cyg_uint32 cyg_crc32_accumulate(cyg_uint32 crc32val, unsigned char *s, int len);
-+//extern uint32 crc32(uint8 *pdata, uint nbytes, uint32 crc);
 +
 +int fd, fd_w;
 +
@@ -130,11 +104,10 @@ index 0000000..14c7488
 +
 +int main(int argc, char ** argv)
 +{
-+	uint input_size,c;
++	unsigned int input_size,c;
 +	char *input_file=NULL, *output_file=NULL;
 +	int opt;
 +	int option_index=0;
-+	int garbage = 0;
 +	char *buf = NULL;
 +	extern char *optarg;
 +	extern int optind, opterr, optopt;
@@ -146,7 +119,6 @@ index 0000000..14c7488
 +	{
 +		{"input", 1, 0, 'i'},
 +		{"output", 1, 0, 'o'},
-+		{"garbage", 0, 0, 'g'},
 +		{0, 0, 0, 0}
 +	};
 +
@@ -168,8 +140,6 @@ index 0000000..14c7488
 +			case 'o' :
 +				output_file = optarg;
 +				printf("output file is [%s]\n",output_file); break;
-+			case 'g' :
-+				garbage = 1; break;
 +			default :
 +				usage();
 +		}
@@ -203,33 +173,6 @@ index 0000000..14c7488
 +
 +	fwhdr->res = fwhdr->res | 0x1;
 +	
-+	//junzhao add fw build date in cbt_fw_header for calculate MD5
-+	#if 0
-+	{
-+	       static char *months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-+	       int year, day, mon=1;
-+	char temp[10]={0};
-+	       unsigned char *p_date = (unsigned char *)&fwhdr->res;
-+	int j;
-+
-+	sscanf(__DATE__, "%s %d %d", temp, &day, &year);
-+
-+	for(j=0;j<12;j++) {
-+		if(!strcmp(temp, months[j])) {
-+			mon = j+1;
-+			break;
-+		}
-+	}
-+	p_date[0]= year-2000;
-+	p_date[1]= mon;
-+	p_date[2]= day;
-+
-+	       printf("%s: Build date(20%d-%d-%d)\n", __FUNCTION__, p_date[0], p_date[1], p_date[2]);
-+
-+	}
-+	#endif
-+	//end
-+
 +	crc = cyg_crc32_accumulate(CRC32_INIT_VALUE,(uint8_t *)&fwhdr->res, 4);
 +	crc = cyg_crc32_accumulate(crc,(uint8_t *)&buf[0], input_size);
 +	
