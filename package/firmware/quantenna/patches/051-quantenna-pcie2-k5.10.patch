@@ -1,0 +1,44 @@
+diff --git a/drivers/pcie2/host/common/qdpc_pcie.c b/drivers/pcie2/host/common/qdpc_pcie.c
+index 6c83aaa9f6..9faf5166bf 100644
+--- a/drivers/pcie2/host/common/qdpc_pcie.c
++++ b/drivers/pcie2/host/common/qdpc_pcie.c
+@@ -189,7 +189,7 @@ static qdpc_bar_t *qdpc_map_bar(struct vmac_priv *priv, qdpc_bar_t *bar,
+ 	qdpc_update_hw_bar(priv->pdev, index);
+ #endif
+ 
+-	vaddr = ioremap_nocache(busaddr, len);
++	vaddr = ioremap(busaddr, len);
+ 	if (!vaddr) {
+ 		printk("Failed to map %u bytes at BAR%u at bus address 0x%p.\n",
+ 			(uint32_t)len, index, (void *)busaddr);
+@@ -336,7 +336,7 @@ void *qdpc_map_pciemem(unsigned long busaddr, size_t len)
+ 			"PCIe memory region starting at 0x%lx\n", (uint32_t)len, busaddr);
+ 		return NULL;
+ 	}
+-	return ioremap_nocache(busaddr, len);
++	return ioremap(busaddr, len);
+ }
+ 
+ void qdpc_unmap_pciemem(unsigned long busaddr, void *vaddr, size_t len)
+diff --git a/pcie2/host/common/topaz_vnet.c b/drivers/pcie2/host/common/topaz_vnet.c
+index b1bb23c761..730b49db01 100644
+--- a/drivers/pcie2/host/common/topaz_vnet.c
++++ b/drivers/pcie2/host/common/topaz_vnet.c
+@@ -72,7 +72,7 @@ MODULE_LICENSE("GPL");
+ static int __sram_text vmac_rx_poll (struct napi_struct *napi, int budget);
+ static int __sram_text skb2rbd_attach(struct net_device *ndev, uint16_t i, uint32_t wrap);
+ static irqreturn_t vmac_interrupt(int irq, void *dev_id);
+-static void vmac_tx_timeout(struct net_device *ndev);
++static void vmac_tx_timeout(struct net_device *ndev, unsigned int txqueue);
+ static void vmac_get_drvinfo(struct net_device *ndev, struct ethtool_drvinfo *info);
+ static void free_tx_skbs(struct vmac_priv *vmp);
+ static void init_tx_bd(struct vmac_priv *vmp);
+@@ -1177,7 +1177,7 @@ static irqreturn_t vmac_interrupt(int irq, void *dev_id)
+  * The Tx ring has been full longer than the watchdog timeout
+  * value. The transmitter must be hung?
+  */
+-inline static void vmac_tx_timeout(struct net_device *ndev)
++inline static void vmac_tx_timeout(struct net_device *ndev, unsigned int txqueue)
+ {
+ 	printk(KERN_ERR "%s: vmac_tx_timeout: ndev=%p\n", ndev->name, ndev);
+ 	ndev->trans_start = jiffies;
