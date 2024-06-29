@@ -1,0 +1,399 @@
+diff --git a/drivers/pcie2/host/common/qdpc_init.c b/drivers/pcie2/host/common/qdpc_init.c
+index ece2269273..601b4ea334 100644
+--- a/drivers/pcie2/host/common/qdpc_init.c
++++ b/drivers/pcie2/host/common/qdpc_init.c
+@@ -223,7 +223,7 @@ static int qdpc_firmware_load(struct pci_dev *pdev, struct vmac_priv *priv, cons
+ 			return FAILURE;
+ 		}
+ 
+-		handle = pci_map_single(priv->pdev, data ,DMABLOCKSIZE, PCI_DMA_TODEVICE);
++		handle = dma_map_single(&priv->pdev->dev, data ,DMABLOCKSIZE, DMA_TO_DEVICE);
+ 		if (!handle) {
+ 			printk("Pci map for memory data block 0x%p error, Download firmware failed!\n", data);
+ 			free_pages((unsigned long)data, get_order(DMABLOCKSIZE));
+@@ -243,7 +243,7 @@ static int qdpc_firmware_load(struct pci_dev *pdev, struct vmac_priv *priv, cons
+ 
+ 			memcpy(data, curdata, size);
+ 			/* flush dcache */
+-			pci_dma_sync_single_for_device(priv->pdev, handle ,size, PCI_DMA_TODEVICE);
++			dma_sync_single_for_device(&priv->pdev->dev, handle ,size, DMA_TO_DEVICE);
+ 
+ 			qdpc_pcie_posted_write(handle + dma_offset, &bda->bda_img);
+ 			qdpc_pcie_posted_write(size, &bda->bda_img_size);
+@@ -257,7 +257,7 @@ static int qdpc_firmware_load(struct pci_dev *pdev, struct vmac_priv *priv, cons
+ 			printk("done!\n");
+ 		}
+ 
+-		pci_unmap_single(priv->pdev,handle, DMABLOCKSIZE, PCI_DMA_TODEVICE);
++		dma_unmap_single(&priv->pdev->dev,handle, DMABLOCKSIZE, DMA_TO_DEVICE);
+ 		/* Mark end of block */
+ 		qdpc_pcie_posted_write(0, &bda->bda_img);
+ 		qdpc_pcie_posted_write(0, &bda->bda_img_size);
+@@ -469,7 +469,7 @@ static void qdpc_pcie_remove(struct pci_dev *pdev)
+ #endif
+ 	pci_disable_device(pdev);
+ 
+-	writel(TOPAZ_SET_INT(IPC_RESET_EP), vmp->ep_ipc_reg);
++	writel(TOPAZ_SET_INT(IPC_RESET_EP), (void*) vmp->ep_ipc_reg);
+ 	qdpc_unmap_iomem(vmp);
+ 
+ 	free_netdev(ndev);
+@@ -521,7 +521,7 @@ int qdpc_pcie_suspend(struct pci_dev *pdev, pm_message_t state)
+ 	ndev->flags &= ~IFF_RUNNING;
+ 	*priv->ep_pmstate = cpu_to_le32(PCI_D3hot);
+ 	barrier();
+-	writel(TOPAZ_SET_INT(IPC_EP_PM_CTRL), priv->ep_ipc_reg);
++	writel(TOPAZ_SET_INT(IPC_EP_PM_CTRL), (void*) priv->ep_ipc_reg);
+ 
+ 	msleep(100);
+ 	pci_save_state(pdev);
+@@ -559,7 +559,7 @@ int qdpc_pcie_resume(struct pci_dev *pdev)
+ 	{
+ 		*priv->ep_pmstate = cpu_to_le32(PCI_D0);
+ 		barrier();
+-		writel(TOPAZ_SET_INT(IPC_EP_PM_CTRL), priv->ep_ipc_reg);
++		writel(TOPAZ_SET_INT(IPC_EP_PM_CTRL), (void*) priv->ep_ipc_reg);
+ 
+ 		msleep(5000);
+ 	}
+@@ -691,7 +691,7 @@ static int link_monitor(void *data)
+ 
+ 				/* add code to reboot the while QCA system here*/
+ 				printk("%s: Attempting to reboot QCA system.\n", __func__);
+-				machine_restart(NULL);
++				emergency_restart();
+ 				break;
+ 			}
+ 			msleep(500);
+diff --git a/drivers/pcie2/host/common/qdpc_init.h b/drivers/pcie2/host/common/qdpc_init.h
+index 6d3c825edc..b122faf2c3 100644
+--- a/drivers/pcie2/host/common/qdpc_init.h
++++ b/drivers/pcie2/host/common/qdpc_init.h
+@@ -42,6 +42,8 @@
+ #define	QDPC_ROW_INCR_OFFSET	0x04
+ #undef	QDPC_CS_DEBUG
+ 
++#define mmiowb()		do { } while (0)
++
+ extern unsigned int (*qdpc_pci_readl)(void *addr);
+ extern void (*qdpc_pci_writel)(unsigned int val, void *addr);
+ 
+diff --git a/drivers/pcie2/host/common/qdpc_pcie.c b/drivers/pcie2/host/common/qdpc_pcie.c
+index 6c83aaa9f6..d4d8449424 100644
+--- a/drivers/pcie2/host/common/qdpc_pcie.c
++++ b/drivers/pcie2/host/common/qdpc_pcie.c
+@@ -29,7 +29,7 @@
+ #include <asm/byteorder.h>
+ #include <linux/pci.h>
+ #include <linux/moduleparam.h>
+-#include <asm-generic/pci-dma-compat.h>
++#include <linux/dma-mapping.h>
+ #include <linux/module.h>
+ 
+ #include "qdpc_config.h"
+@@ -189,7 +189,7 @@ static qdpc_bar_t *qdpc_map_bar(struct vmac_priv *priv, qdpc_bar_t *bar,
+ 	qdpc_update_hw_bar(priv->pdev, index);
+ #endif
+ 
+-	vaddr = ioremap_nocache(busaddr, len);
++	vaddr = ioremap(busaddr, len);
+ 	if (!vaddr) {
+ 		printk("Failed to map %u bytes at BAR%u at bus address 0x%p.\n",
+ 			(uint32_t)len, index, (void *)busaddr);
+@@ -273,9 +273,9 @@ int32_t qdpc_set_dma_mask(struct vmac_priv *priv) {
+ 
+ 	printk("Requested DMA mask:0x%llx\n", dma_mask);
+ 
+-	result = pci_set_dma_mask(priv->pdev, dma_mask);
++	result = dma_set_mask_and_coherent(&priv->pdev->dev, dma_mask);
+ 	if (!result) {
+-			result = pci_set_consistent_dma_mask(priv->pdev, dma_mask);
++			result = dma_set_mask_and_coherent(&priv->pdev->dev, dma_mask);
+ 			if (result) {
+ 				printk(" pci_set_consistent_dma_mask() error %d. Mask:0x%llx\n", result, dma_mask);
+ 				return 1;
+@@ -336,7 +336,7 @@ void *qdpc_map_pciemem(unsigned long busaddr, size_t len)
+ 			"PCIe memory region starting at 0x%lx\n", (uint32_t)len, busaddr);
+ 		return NULL;
+ 	}
+-	return ioremap_nocache(busaddr, len);
++	return ioremap(busaddr, len);
+ }
+ 
+ void qdpc_unmap_pciemem(unsigned long busaddr, void *vaddr, size_t len)
+diff --git a/drivers/pcie2/host/common/topaz_vnet.c b/drivers/pcie2/host/common/topaz_vnet.c
+index b1bb23c761..106ed38629 100644
+--- a/drivers/pcie2/host/common/topaz_vnet.c
++++ b/drivers/pcie2/host/common/topaz_vnet.c
+@@ -21,6 +21,9 @@
+ #define EXPORT_SYMTAB
+ #endif
+ 
++#define NET_NAME_USER		3	/* provided by user-space */
++
++#include <linux/ethtool.h>
+ #include <linux/module.h>
+ #include <linux/kernel.h>
+ #include <linux/string.h>
+@@ -37,7 +40,6 @@
+ #include <linux/sysfs.h>
+ #include <linux/pci.h>
+ 
+-
+ #include <qdpc_platform.h>
+ 
+ #include <asm/cache.h>		/* For cache line size definitions */
+@@ -50,13 +52,13 @@
+ #include "qdpc_init.h"
+ #include "qdpc_debug.h"
+ #include "qdpc_regs.h"
+-#include "nss_api_if.h"
++//#include "nss_api_if.h"
+ #include "qdpc_version.h"
+ 
+ #define DRV_NAME	"qdpc-host"
+ 
+ #ifndef DRV_VERSION
+-#define DRV_VERSION	"1.0"
++#define DRV_VERSION	"1.0-k5.4-openwrt-nonss-tc"
+ #endif
+ 
+ #define DRV_AUTHOR	"Quantenna Communications Inc."
+@@ -72,10 +74,8 @@ MODULE_LICENSE("GPL");
+ static int __sram_text vmac_rx_poll (struct napi_struct *napi, int budget);
+ static int __sram_text skb2rbd_attach(struct net_device *ndev, uint16_t i, uint32_t wrap);
+ static irqreturn_t vmac_interrupt(int irq, void *dev_id);
+-static void vmac_tx_timeout(struct net_device *ndev);
+-static int vmac_get_settings(struct net_device *ndev, struct ethtool_cmd *cmd);
+-static int vmac_set_settings(struct net_device *ndev, struct ethtool_cmd *cmd);
+-static void vmac_get_drvinfo(struct net_device *ndev, struct ethtool_drvinfo *info);
++static void vmac_tx_timeout(struct net_device *ndev, unsigned int txqueue);
++//static void vmac_get_drvinfo(struct net_device *ndev, struct ethtool_drvinfo *info);
+ static void free_tx_skbs(struct vmac_priv *vmp);
+ static void init_tx_bd(struct vmac_priv *vmp);
+ static void free_rx_skbs(struct vmac_priv *vmp);
+@@ -450,7 +450,7 @@ static int alloc_bd_tbl(struct net_device *ndev)
+ 
+ 	/* uint32_t is used to be updated by ep */
+ 	len = (vmp->tx_bd_num + vmp->rx_bd_num) * VMAC_BD_LEN + VMAC_BD_INT32_VAR * sizeof(uint32_t);
+-	ucaddr = (uint32_t)pci_alloc_consistent(vmp->pdev, len, (dma_addr_t *)&paddr);
++	ucaddr = (uint32_t)dma_alloc_coherent(&vmp->pdev->dev, len, (dma_addr_t *)&paddr, GFP_ATOMIC);
+ 	if (!ucaddr)
+ 		return -1;
+ 
+@@ -498,7 +498,7 @@ static int alloc_bd_tbl(struct net_device *ndev)
+ 
+ static void free_bd_tbl(struct vmac_priv *vmp)
+ {
+-	pci_free_consistent(vmp->pdev, vmp->uncache_len, (void *)vmp->addr_uncache,
++	dma_free_coherent(&vmp->pdev->dev, vmp->uncache_len, (void *)vmp->addr_uncache,
+ 			qdpc_pci_readl(&vmp->bda->bda_rc_tx_bd_base));
+ }
+ 
+@@ -790,10 +790,10 @@ static int __sram_text vmac_rx_poll(struct napi_struct *napi, int budget)
+ 				dev_kfree_skb(skb);
+ 			} else {
+ #ifdef QTN_SKB_RECYCLE_SUPPORT
+-				pci_unmap_single(vmp->pdev, rbdp->buff_addr,
++				dma_unmap_single(&vmp->pdev->dev, rbdp->buff_addr,
+ 					skb_end_pointer(skb) - skb->data, (int)DMA_BIDIRECTIONAL);
+ #else
+-				pci_unmap_single(vmp->pdev, rbdp->buff_addr,
++				dma_unmap_single(&vmp->pdev->dev, rbdp->buff_addr,
+ 					skb_end_pointer(skb) - skb->data, (int)DMA_FROM_DEVICE);
+ #endif /* QTN_SKB_RECYCLE_SUPPORT */
+ 
+@@ -820,11 +820,11 @@ static int __sram_text vmac_rx_poll(struct napi_struct *napi, int budget)
+ 			}
+ 		}
+ 		if ((ndev->stats.rx_packets & RX_DONE_INTR_MSK) == 0)
+-			writel(TOPAZ_SET_INT(IPC_RC_RX_DONE), vmp->ep_ipc_reg);
++			writel(TOPAZ_SET_INT(IPC_RC_RX_DONE), (void*) vmp->ep_ipc_reg);
+ 
+ 		dump_rx_bd(vmp);
+ 
+-		ndev->last_rx = jiffies;
++        	netif_trans_update(ndev);
+ 
+ 		/*
+ 		 * We are done with the current buffer attached to this descriptor, so attach a new
+@@ -892,7 +892,7 @@ static int __sram_text skb2rbd_attach(struct net_device *ndev, uint16_t rx_bd_in
+ #ifdef QTN_SKB_RECYCLE_SUPPORT
+ 	buff_addr = virt_to_bus(skb->data);
+ #else
+-	buff_addr = (uint32_t)pci_map_single(vmp->pdev, skb->data,
++	buff_addr = (uint32_t)dma_map_single(&vmp->pdev->dev, skb->data,
+ 				skb_end_pointer(skb) - skb->data, (int)DMA_FROM_DEVICE);
+ #endif
+ 	rbdp->buff_addr = cpu_to_le32(buff_addr);
+@@ -927,7 +927,7 @@ vmac_tx_teardown(struct net_device *ndev, qdpc_pcie_bda_t *bda)
+ #ifdef QTN_SKB_RECYCLE_SUPPORT
+ 		vmac_rx_skb_freelist_push(vmp, (dma_addr_t)tbdp->buff_addr, skb);
+ #else
+-		pci_unmap_single(vmp->pdev, (dma_addr_t)tbdp->buff_addr,
++		dma_unmap_single(&vmp->pdev->dev, (dma_addr_t)tbdp->buff_addr,
+ 			skb->len, (int)DMA_TO_DEVICE);
+ 		dev_kfree_skb(skb);
+ #endif /* QTN_SKB_RECYCLE_SUPPORT */
+@@ -1035,7 +1035,7 @@ static inline void vmac_try_stop_queue(struct net_device *ndev)
+ 		vmp->txqueue_stopped = 1;
+ 		*vmp->txqueue_wake = 0;
+ 		barrier();
+-		writel(TOPAZ_SET_INT(IPC_RC_STOP_TX), vmp->ep_ipc_reg);
++		writel(TOPAZ_SET_INT(IPC_RC_STOP_TX), (void*)vmp->ep_ipc_reg);
+ 		vmp->tx_stop_queue_cnt++;
+ 		netif_stop_queue(ndev);
+ 	}
+@@ -1107,9 +1107,9 @@ vmac_tx(void *pkt_handle, struct net_device *ndev)
+ 	skb = (struct sk_buff *)pkt_handle;
+ 	vmp->tx_skb[i] = (struct sk_buff *)pkt_handle;
+ #ifdef QTN_SKB_RECYCLE_SUPPORT
+-	baddr = (uint32_t)pci_map_single(vmp->pdev, skb->data, skb->len, (int)DMA_BIDIRECTIONAL);
++	baddr = (uint32_t)dma_map_single(&vmp->pdev->dev, skb->data, skb->len, (int)DMA_BIDIRECTIONAL);
+ #else
+-	baddr = (uint32_t)pci_map_single(vmp->pdev, skb->data, skb->len, (int)DMA_TO_DEVICE);
++	baddr = (uint32_t)dma_map_single(&vmp->pdev->dev, skb->data, skb->len, (int)DMA_TO_DEVICE);
+ #endif
+ 	len = skb->len;
+ 	wmb();
+@@ -1127,7 +1127,7 @@ vmac_tx(void *pkt_handle, struct net_device *ndev)
+ 	vmp->vmac_tx_queue_len++;
+ 
+ #ifdef CONFIG_ARM
+-	dump_tx_pkt(vmp, (void *)__bus_to_virt(baddr), len);
++	dump_tx_pkt(vmp, (void *)__phys_to_virt(baddr), len);
+ #else
+ 	dump_tx_pkt(vmp, bus_to_virt(baddr), len);
+ #endif
+@@ -1139,7 +1139,7 @@ vmac_tx(void *pkt_handle, struct net_device *ndev)
+ 
+ 	dump_tx_bd(vmp);
+ 
+-	writel(TOPAZ_SET_INT(IPC_EP_RX_PKT), vmp->ep_ipc_reg);
++	writel(TOPAZ_SET_INT(IPC_EP_RX_PKT), (void*) vmp->ep_ipc_reg);
+ 
+ #ifdef RC_TXDONE_TIMER
+ 	vmac_tx_teardown(ndev, bda);
+@@ -1177,10 +1177,10 @@ static irqreturn_t vmac_interrupt(int irq, void *dev_id)
+  * The Tx ring has been full longer than the watchdog timeout
+  * value. The transmitter must be hung?
+  */
+-inline static void vmac_tx_timeout(struct net_device *ndev)
++inline static void vmac_tx_timeout(struct net_device *ndev, unsigned int txqueue)
+ {
+ 	printk(KERN_ERR "%s: vmac_tx_timeout: ndev=%p\n", ndev->name, ndev);
+-	ndev->trans_start = jiffies;
++	netif_trans_update(ndev);
+ }
+ 
+ #ifdef RC_TXDONE_TIMER
+@@ -1202,43 +1202,21 @@ static void vmac_tx_buff_cleaner(struct net_device *ndev)
+ }
+ #endif
+ 
+-/* ethtools support */
+-static int vmac_get_settings(struct net_device *ndev, struct ethtool_cmd *cmd)
+-{
+-	return -EINVAL;
+-}
+-
+-static int vmac_set_settings(struct net_device *ndev, struct ethtool_cmd *cmd)
+-{
+-
+-	if (!capable(CAP_NET_ADMIN))
+-		return -EPERM;
+-
+-	return -EINVAL;
+-}
+-
+ static int vmac_ioctl(struct net_device *ndev, struct ifreq *rq, int cmd)
+ {
+ 	return -EINVAL;
+ }
+ 
+-static void vmac_get_drvinfo(struct net_device *ndev, struct ethtool_drvinfo *info)
+-{
+-	struct vmac_priv *vmp = netdev_priv(ndev);
+-
+-	strcpy(info->driver, DRV_NAME);
+-	strcpy(info->version, DRV_VERSION);
+-	info->fw_version[0] = '\0';
+-	sprintf(info->bus_info, "%s %d", DRV_NAME, vmp->mac_id);
+-	info->regdump_len = 0;
+-}
++// static void vmac_get_drvinfo(struct net_device *ndev, struct ethtool_drvinfo *info)
++// {
++// 	struct vmac_priv *vmp = netdev_priv(ndev);
+ 
+-static const struct ethtool_ops vmac_ethtool_ops = {
+-	.get_settings = vmac_get_settings,
+-	.set_settings = vmac_set_settings,
+-	.get_drvinfo = vmac_get_drvinfo,
+-	.get_link = ethtool_op_get_link,
+-};
++// 	strcpy(info->driver, DRV_NAME);
++// 	strcpy(info->version, DRV_VERSION);
++// 	info->fw_version[0] = '\0';
++// 	sprintf(info->bus_info, "%s %d", DRV_NAME, vmp->mac_id);
++// 	info->regdump_len = 0;
++// }
+ 
+ static const struct net_device_ops vmac_device_ops = {
+ 	.ndo_open = vmac_open,
+@@ -1254,7 +1232,7 @@ struct net_device *vmac_alloc_ndev(void)
+ 	struct net_device * ndev;
+ 
+         /* Allocate device structure */
+-	ndev = alloc_netdev(sizeof(struct vmac_priv), vmaccfg.ifname, ether_setup);
++	ndev = alloc_netdev(sizeof(struct vmac_priv), vmaccfg.ifname, NET_NAME_USER ,ether_setup);
+ 	if(!ndev)
+ 		printk(KERN_ERR "%s: alloc_etherdev failed\n", vmaccfg.ifname);
+ 
+@@ -1262,7 +1240,7 @@ struct net_device *vmac_alloc_ndev(void)
+ }
+ EXPORT_SYMBOL(vmac_alloc_ndev);
+ 
+-static void eth_parse_enetaddr(const char *addr, uint8_t *enetaddr)
++static void eth_parse_enetaddr(const char *addr, unsigned char *enetaddr)
+ {
+ 	char *end;
+ 	int i;
+@@ -1290,14 +1268,26 @@ int vmac_net_init(struct pci_dev *pdev)
+ 
+ 
+ 	if (ethaddr)
+-		eth_parse_enetaddr(ethaddr, ndev->dev_addr);
++	{
++		unsigned char *temp_addr;
++		eth_parse_enetaddr(ethaddr, temp_addr);
++		eth_hw_addr_set(ndev, temp_addr);
++		//free(temp_addr);
++	}
+ 
+ 	if (!is_valid_ether_addr(ndev->dev_addr))
+-		random_ether_addr(ndev->dev_addr);
++	{
++		unsigned char *temp_addr;
++
++		eth_random_addr(temp_addr);
++		eth_hw_addr_set(ndev, temp_addr);
++		//free(temp_addr);
++	}
++		
++	//	eth_random_addr(ndev->dev_addr);
+ 
+ 	ndev->netdev_ops = &vmac_device_ops;
+ 	ndev->tx_queue_len = QTN_GLOBAL_INIT_EMAC_TX_QUEUE_LEN;
+-	SET_ETHTOOL_OPS(ndev, &vmac_ethtool_ops);
+ 
+ 	/* Initialize private data */
+ 	vmp = netdev_priv(ndev);
+@@ -1351,7 +1341,7 @@ int vmac_net_init(struct pci_dev *pdev)
+ 		goto vnet_init_err_2;
+ 
+ 	/* Initialize NAPI */
+-	netif_napi_add(ndev, &vmp->napi, vmac_rx_poll, 10);
++	netif_napi_add(ndev, &vmp->napi, vmac_rx_poll);
+ 
+ 	/* Register device */
+ 	if ((err = register_netdev(ndev)) != 0) {
